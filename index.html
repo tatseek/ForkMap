@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forkmap — Restaurant Finder</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet"
+          href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
+          crossorigin=""/>
+
+    <!-- App styles -->
+    <link rel="stylesheet" href="frontend/css/style.css">
+
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍽️</text></svg>">
+</head>
+<body>
+
+<div id="app">
+
+    <!-- ── Header ─────────────────────────────────────────── -->
+    <header id="header">
+        <div class="header-logo">Fork<span>map</span></div>
+        <div class="header-tagline">Discover · Navigate · Taste</div>
+        <div class="header-spacer"></div>
+        <div class="header-badge">Dijkstra · Haversine · QuickSort</div>
+    </header>
+
+    <!-- ── Sidebar ────────────────────────────────────────── -->
+    <aside id="sidebar">
+
+        <!-- Search controls -->
+        <div id="controls">
+
+            <!-- Cuisine filter -->
+            <div class="control-row">
+                <span class="control-label">Cuisine</span>
+                <select id="cuisineSelect" class="search-input" aria-label="Filter by cuisine">
+                    <option value="">All Cuisines</option>
+                </select>
+            </div>
+
+            <!-- Radius slider -->
+            <div class="control-row">
+                <span class="control-label">Radius</span>
+                <input id="radiusInput" type="range" min="0.5" max="10" step="0.5" value="2"
+                       class="search-input" aria-label="Search radius">
+                <span class="radius-display" id="radiusLabel">2.0 km</span>
+            </div>
+
+            <!-- Action buttons -->
+            <div class="btn-row">
+                <button id="searchBtn" class="btn btn-primary">🔍 Search</button>
+                <button id="locateBtn" class="btn btn-secondary" title="Use my location">📍 Locate Me</button>
+            </div>
+
+            <!-- Graph overlay toggle -->
+            <div class="toggle-row">
+                <input type="checkbox" id="graphToggle" aria-label="Show road graph">
+                <label for="graphToggle">Show road graph overlay</label>
+            </div>
+
+        </div><!-- /controls -->
+
+        <!-- Results header -->
+        <div id="results-header">
+            <span class="results-count" id="resultsCount">Searching…</span>
+        </div>
+
+        <!-- Results list -->
+        <div id="resultsList" role="list" aria-label="Restaurant results"></div>
+
+        <!-- Route info (hidden until route computed) -->
+        <div id="routeInfo" class="hidden" role="status">
+            <div class="route-actions">
+                <button id="clearRouteBtn" class="btn btn-ghost">✕ Clear route</button>
+            </div>
+        </div>
+
+    </aside><!-- /sidebar -->
+
+    <!-- ── Map ────────────────────────────────────────────── -->
+    <main id="map" aria-label="Interactive map"></main>
+
+</div><!-- /app -->
+
+<!-- Loading overlay -->
+<div id="loadingOverlay" aria-live="polite" aria-busy="true">
+    <div class="loader"></div>
+</div>
+
+<!-- Toast notifications -->
+<div id="toastContainer" aria-live="polite"></div>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        crossorigin=""></script>
+
+<!-- App (ES modules) -->
+<script type="module" src="frontend/js/app.js"></script>
+
+</body>
+</html>

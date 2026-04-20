@@ -1,0 +1,8 @@
+Options -Indexes
+RewriteEngine On
+RewriteBase /restaurant-finder/
+
+# Route everything under /api/* to the PHP entry point
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^api/(.*)$ backend/api/index.php [QSA,L]

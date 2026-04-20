@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(php -l /var/www/html/restaurant-finder/backend/services/OverpassService.php)",
+      "Bash(mysql *)",
+      "Bash(curl -s \"http://localhost/restaurant-finder/backend/api/index.php?_path=/restaurants&lat=12.9716&lng=77.6090&radius=5\")",
+      "Bash(php -r ' *)",
+      "Bash(curl -s \"http://localhost/restaurant-finder/backend/api/index.php?_path=/restaurants&lat=12.9716&lng=77.6090&radius=5&_force_db=1\")"
+    ]
+  }
+}
