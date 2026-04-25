@@ -23,6 +23,7 @@ restaurant-finder/
 │   ├── api/index.php             ← REST router (5 endpoints)
 │   ├── db/Database.php           ← PDO singleton
 │   ├── models/RestaurantModel.php← Data access + Haversine SQL
+|   ├──services/OverpassService.php
 │   └── algorithms/Algorithms.php ← RankingEngine, QuickSort, Dijkstra
 │
 └── sql/
