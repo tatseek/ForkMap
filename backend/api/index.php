@@ -124,9 +124,15 @@ function handleRoute(): void {
     if ($toNode === false || $toNode === null) {
         $restId = filter_input(INPUT_GET, 'restaurant_id', FILTER_VALIDATE_INT);
         if ($restId) {
-            $rest   = $model->findById($restId);
-            $toNode = $rest ? (int)($rest['graph_node_id'] ?? 0) : null;
+		$rest   = $model->findById($restId);
+		if ($rest) {
+                $nearestTo = $model->nearestNode(
+                    (float)$rest['latitude'],
+                    (float)$rest['longitude']
+                );
+            $toNode = $nearestTo ? (int)$nearestTo['id'] : null;
         }
+	}
     }
 
     if (!$fromNode || !$toNode) {

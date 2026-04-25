@@ -433,4 +433,11 @@ input[type="range"] {
     }
     #map  { grid-column: 1; grid-row: 2; }
     #sidebar { grid-row: 3; }
+
+}
+
+.route-mode {
+    font-size: 11px;
+    color: #888;
+    font-style: italic;
 }

@@ -44,6 +44,9 @@ function cacheElements() {
     els.clearRoute   = $('clearRouteBtn');
     els.graphToggle  = $('graphToggle');
     els.toastContainer=$('toastContainer');
+    els.locationInput = $('locationInput');
+    els.locationSearchBtn = $('locationSearchBtn');
+    els.routingMode  = $('routingMode'); 
 }
 
 // ── Cuisine filter ────────────────────────────────────────────
@@ -100,6 +103,17 @@ function bindEvents() {
     document.querySelectorAll('.search-input').forEach(el => {
         el.addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
     });
+    els.locationSearchBtn.addEventListener('click', () => {
+    const query = els.locationInput.value.trim();
+    if (query) searchLocation(query);
+});
+
+els.locationInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+        const query = els.locationInput.value.trim();
+        if (query) searchLocation(query);
+    }
+});
 }
 
 // ── Geolocation ───────────────────────────────────────────────
@@ -123,6 +137,24 @@ function locateUser() {
         { enableHighAccuracy: true, timeout: 8000 }
     );
 }
+// ── Location Search (Nominatim) ───────────────────────────────
+async function searchLocation(query) {
+    const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`,
+        { headers: { 'Accept-Language': 'en' } }
+    );
+    const data = await res.json();
+    if (data.length === 0) return toast('Location not found', 'error');
+
+    const { lat, lon } = data[0];
+    state.userLat = parseFloat(lat);
+    state.userLng = parseFloat(lon);
+
+    MapManager.getMap().setView([state.userLat, state.userLng], 14);
+    MapManager.setUserLocation(state.userLat, state.userLng);
+    await search();
+}
+
 
 // ── Main search ───────────────────────────────────────────────
 async function search() {
@@ -220,27 +252,76 @@ function onRestaurantSelect(r) {
 }
 
 // ── Routing (Dijkstra) ────────────────────────────────────────
+// ── Routing (Hybrid: OSRM + Dijkstra) ─────────────────────────
 async function routeTo(restaurantId) {
+    const rest = state.restaurants.find(r => r.id == restaurantId);
+    if (!rest) return toast('Restaurant not found', 'error');
+
     setLoading(true);
     MapManager.clearRoute();
     els.routeInfo.classList.add('hidden');
 
-    try {
-        const data = await Api.getRoute(state.userLat, state.userLng, restaurantId);
-        MapManager.drawRoute(data.path);
+    const useDijkstra = els.routingMode && els.routingMode.value === 'dijkstra';
 
-        const r = state.restaurants.find(x => x.id == restaurantId);
-        els.routeInfo.innerHTML = `
-            <strong>Route to ${r ? r.name : 'restaurant'}</strong><br>
-            Distance: <b>${data.distance_km} km</b> (${data.distance_m} m)<br>
-            Via: ${data.roads.join(' → ')}`;
-        els.routeInfo.classList.remove('hidden');
-        toast(`Route found: ${data.distance_km} km`, 'success');
+    try {
+        if (useDijkstra) {
+            await routeViaDijkstra(restaurantId, rest);
+        } else {
+            await routeViaOSRM(rest);
+        }
     } catch (err) {
         toast('Routing failed: ' + err.message, 'error');
     } finally {
         setLoading(false);
     }
+}
+
+// Custom Dijkstra (uses our backend + graph_nodes)
+async function routeViaDijkstra(restaurantId, rest) {
+    const data = await Api.getRoute(state.userLat, state.userLng, restaurantId);
+    MapManager.drawRoute(data.path);
+
+    els.routeInfo.innerHTML = `
+        <strong>Route to ${rest.name}</strong><br>
+        <span class="route-mode">via Custom Dijkstra</span><br>
+        Distance: <b>${data.distance_km} km</b> (${data.distance_m} m)<br>
+        Via: ${data.roads.join(' → ')}`;
+    els.routeInfo.classList.remove('hidden');
+    toast(`Route found: ${data.distance_km} km (Dijkstra)`, 'success');
+}
+
+// OSRM (works worldwide)
+async function routeViaOSRM(rest) {
+    const url = `https://router.project-osrm.org/route/v1/driving/` +
+                `${state.userLng},${state.userLat};${rest.longitude},${rest.latitude}` +
+                `?overview=full&geometries=geojson&steps=true`;
+
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (data.code !== 'Ok' || !data.routes || data.routes.length === 0) {
+        throw new Error('No route found via OSRM');
+    }
+
+    const route = data.routes[0];
+    const path = route.geometry.coordinates.map(([lng, lat]) => ({
+        latitude: lat,
+        longitude: lng,
+        label: ''
+    }));
+
+    MapManager.drawRoute(path);
+
+    const distanceKm = (route.distance / 1000).toFixed(2);
+    const durationMin = Math.round(route.duration / 60);
+
+    els.routeInfo.innerHTML = `
+        <strong>Route to ${rest.name}</strong><br>
+        <span class="route-mode">via OSRM (OpenStreetMap)</span><br>
+        Distance: <b>${distanceKm} km</b><br>
+        Duration: <b>${durationMin} min</b> by car`;
+    els.routeInfo.classList.remove('hidden');
+    toast(`Route found: ${distanceKm} km (OSRM)`, 'success');
 }
 
 // ── Utilities ─────────────────────────────────────────────────

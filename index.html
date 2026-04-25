@@ -49,13 +49,32 @@
                        class="search-input" aria-label="Search radius">
                 <span class="radius-display" id="radiusLabel">2.0 km</span>
             </div>
+            
+            <div class="control-row">
+    <span class="control-label">Location</span>
+    <input 
+        type="text" 
+        id="locationInput" 
+        placeholder="Search a location..." 
+        class="search-input"
+        style="flex:1;"
+    />
+    <button id="locationSearchBtn" class="btn btn-secondary">Go</button>
+</div>
 
             <!-- Action buttons -->
             <div class="btn-row">
                 <button id="searchBtn" class="btn btn-primary">🔍 Search</button>
                 <button id="locateBtn" class="btn btn-secondary" title="Use my location">📍 Locate Me</button>
             </div>
-
+<!-- Routing mode selector -->
+<div class="control-row">
+    <span class="control-label">Routing</span>
+    <select id="routingMode" class="search-input" aria-label="Routing algorithm">
+        <option value="osrm">OSRM (Worldwide)</option>
+        <option value="dijkstra">Custom Dijkstra (Demo)</option>
+    </select>
+</div>
             <!-- Graph overlay toggle -->
             <div class="toggle-row">
                 <input type="checkbox" id="graphToggle" aria-label="Show road graph">
