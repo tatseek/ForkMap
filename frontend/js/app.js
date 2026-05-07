@@ -256,7 +256,6 @@ function onRestaurantSelect(r) {
 async function routeTo(restaurantId) {
     const rest = state.restaurants.find(r => r.id == restaurantId);
     if (!rest) return toast('Restaurant not found', 'error');
-
     setLoading(true);
     MapManager.clearRoute();
     els.routeInfo.classList.add('hidden');
@@ -265,7 +264,13 @@ async function routeTo(restaurantId) {
 
     try {
         if (useDijkstra) {
-            await routeViaDijkstra(restaurantId, rest);
+            try {
+                await routeViaDijkstra(restaurantId, rest);
+            } catch (e) {
+                // Dijkstra failed — silently fall back to OSRM
+                toast('Dijkstra unavailable for this location, using OSRM route', 'info');
+                await routeViaOSRM(rest);
+            }
         } else {
             await routeViaOSRM(rest);
         }
@@ -278,18 +283,42 @@ async function routeTo(restaurantId) {
 
 // Custom Dijkstra (uses our backend + graph_nodes)
 async function routeViaDijkstra(restaurantId, rest) {
-    const data = await Api.getRoute(state.userLat, state.userLng, restaurantId);
-    MapManager.drawRoute(data.path);
+    // Generate graph dynamically around user + destination
+    const graph = generateLocalGraph(
+        state.userLat, state.userLng,
+        parseFloat(rest.latitude), parseFloat(rest.longitude)
+    );
 
+    const result = dijkstraLocal(
+        graph.adjacency,
+        graph.sourceNode.id,
+        graph.destNode.id
+    );
+
+    if (!result || result.distance === Infinity) {
+        throw new Error('No path found');
+    }
+
+    // Convert path node ids to lat/lng for map rendering
+    const nodeById = {};
+    Object.values(graph.nodes).forEach(n => nodeById[n.id] = n);
+
+    const pathGeo = result.path.map(id => ({
+        latitude:  nodeById[id].lat,
+        longitude: nodeById[id].lng,
+        label: `Node ${id}`
+    }));
+
+    const distKm = (result.distance / 1000).toFixed(2);
+
+    MapManager.drawRoute(pathGeo);
     els.routeInfo.innerHTML = `
-        <strong>Route to ${rest.name}</strong><br>
-        <span class="route-mode">via Custom Dijkstra</span><br>
-        Distance: <b>${data.distance_km} km</b> (${data.distance_m} m)<br>
-        Via: ${data.roads.join(' → ')}`;
+        <strong>Dijkstra Route to ${rest.name}</strong><br>
+        Distance: <b>${distKm} km</b> (${Math.round(result.distance)} m)<br>
+        Nodes visited: ${result.path.length}`;
     els.routeInfo.classList.remove('hidden');
-    toast(`Route found: ${data.distance_km} km (Dijkstra)`, 'success');
+    toast(`Dijkstra route found: ${distKm} km`, 'success');
 }
-
 // OSRM (works worldwide)
 async function routeViaOSRM(rest) {
     const url = `https://router.project-osrm.org/route/v1/driving/` +
@@ -357,6 +386,112 @@ function toast(msg, type = 'info') {
         setTimeout(() => t.remove(), 400);
     }, 3500);
 }
+function generateLocalGraph(userLat, userLng, destLat, destLng) {
+    const nodes = {};
+    const adjacency = {};
 
+    // Create a 5x5 grid of nodes spanning between user and destination
+    const minLat = Math.min(userLat, destLat) - 0.005;
+    const maxLat = Math.max(userLat, destLat) + 0.005;
+    const minLng = Math.min(userLng, destLng) - 0.005;
+    const maxLng = Math.max(userLng, destLng) + 0.005;
+
+    const GRID = 5;
+    let id = 1;
+
+    for (let i = 0; i < GRID; i++) {
+        for (let j = 0; j < GRID; j++) {
+            const lat = minLat + (i / (GRID - 1)) * (maxLat - minLat);
+            const lng = minLng + (j / (GRID - 1)) * (maxLng - minLng);
+            nodes[`${i}_${j}`] = { id, lat, lng };
+            adjacency[id] = [];
+            id++;
+        }
+    }
+
+    // Connect adjacent nodes with Haversine distance as weight
+    for (let i = 0; i < GRID; i++) {
+        for (let j = 0; j < GRID; j++) {
+            const curr = nodes[`${i}_${j}`];
+            const neighbors = [
+                nodes[`${i+1}_${j}`],
+                nodes[`${i-1}_${j}`],
+                nodes[`${i}_${j+1}`],
+                nodes[`${i}_${j-1}`]
+            ].filter(Boolean);
+
+            neighbors.forEach(nb => {
+                const dist = haversineDistance(curr.lat, curr.lng, nb.lat, nb.lng);
+                adjacency[curr.id].push({ to: nb.id, weight: dist });
+            });
+        }
+    }
+
+    // Find nearest node to a coordinate
+    function nearestNode(lat, lng) {
+        let best = null, bestDist = Infinity;
+        Object.values(nodes).forEach(n => {
+            const d = haversineDistance(lat, lng, n.lat, n.lng);
+            if (d < bestDist) { bestDist = d; best = n; }
+        });
+        return best;
+    }
+
+    const sourceNode = nearestNode(userLat, userLng);
+    const destNode   = nearestNode(destLat, destLng);
+
+    return { adjacency, nodes, sourceNode, destNode };
+}
+
+function haversineDistance(lat1, lng1, lat2, lng2) {
+    const R = 6371000; // metres
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) ** 2 +
+              Math.cos(lat1 * Math.PI/180) *
+              Math.cos(lat2 * Math.PI/180) *
+              Math.sin(dLng/2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function dijkstraLocal(adjacency, sourceId, destId) {
+    const dist = {};
+    const prev = {};
+    const visited = {};
+
+    Object.keys(adjacency).forEach(id => dist[id] = Infinity);
+    dist[sourceId] = 0;
+
+    // Simple priority queue using array (fine for small graphs)
+    const pq = [{ id: sourceId, d: 0 }];
+
+    while (pq.length) {
+        pq.sort((a, b) => a.d - b.d);
+        const { id: u, d: dU } = pq.shift();
+
+        if (visited[u]) continue;
+        visited[u] = true;
+        if (u == destId) break;
+
+        (adjacency[u] || []).forEach(edge => {
+            const alt = dU + edge.weight;
+            if (alt < dist[edge.to]) {
+                dist[edge.to] = alt;
+                prev[edge.to] = u;
+                pq.push({ id: edge.to, d: alt });
+            }
+        });
+    }
+
+    // Reconstruct path
+    const path = [];
+    let cur = destId;
+    while (cur !== undefined) {
+        path.unshift(cur);
+        cur = prev[cur];
+    }
+
+    return { distance: dist[destId], path };
+}
 // Expose routeTo globally for map popup button clicks
 window.App = { routeTo };
